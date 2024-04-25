@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="114.0577mm"
+   height="16.064615mm"
+   viewBox="0 0 114.0577 16.064615"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <g
+     id="layer1"
+     transform="translate(-13.043583,-16.934112)">
+    <g
+       id="g8"
+       transform="translate(0,-0.1143322)">
+      <rect
+         style="fill:none;stroke:#000000;stroke-width:0.264583;stroke-miterlimit:1;stroke-dasharray:none;stroke-opacity:1"
+         id="rect1"
+         width="16.715122"
+         height="15.800031"
+         x="13.175875"
+         y="17.180737" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.23333px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Normal';font-variant-ligatures:normal;font-variant-position:sub;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583;stroke-miterlimit:1;stroke-opacity:1"
+         x="15.192742"
+         y="23.97591"
+         id="text1"><tspan
+           id="tspan1"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.23333px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+           x="15.192742"
+           y="23.97591">Super</tspan><tspan
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.23333px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+           x="15.192742"
+           y="29.267572"
+           id="tspan2">Block</tspan></text>
+    </g>
+    <g
+       id="g9"
+       transform="translate(-1.0583333,-0.14808273)">
+      <rect
+         style="fill:none;stroke:#000000;stroke-width:0.264583;stroke-miterlimit:1;stroke-dasharray:none;stroke-opacity:1"
+         id="rect1-5"
+         width="19.782576"
+         height="15.782575"
+         x="30.943468"
+         y="17.214487" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.23333px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Normal';font-variant-ligatures:normal;font-variant-position:sub;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583;stroke-miterlimit:1;stroke-opacity:1"
+         x="33.170113"
+         y="23.627831"
+         id="text3"><tspan
+           id="tspan3"
+           style="stroke-width:0.264583"
+           x="33.170113"
+           y="23.627831">Inode</tspan><tspan
+           style="stroke-width:0.264583"
+           x="33.170113"
+           y="28.919493"
+           id="tspan4">Bitmap</tspan></text>
+    </g>
+    <g
+       id="g10"
+       transform="translate(-1.7327147,-0.14767456)">
+      <rect
+         style="fill:none;stroke:#000000;stroke-width:0.264583;stroke-miterlimit:1;stroke-dasharray:none;stroke-opacity:1"
+         id="rect1-2"
+         width="22.766867"
+         height="15.766868"
+         x="51.479778"
+         y="17.214079" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.23333px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Normal';font-variant-ligatures:normal;font-variant-position:sub;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583;stroke-miterlimit:1;stroke-opacity:1"
+         x="55.19857"
+         y="23.554455"
+         id="text5"><tspan
+           id="tspan5"
+           style="stroke-width:0.264583"
+           x="55.19857"
+           y="23.554455">Data</tspan><tspan
+           style="stroke-width:0.264583"
+           x="55.19857"
+           y="28.846117"
+           id="tspan6">Bitmap</tspan></text>
+    </g>
+    <g
+       id="g11"
+       transform="translate(-8.3214524,-0.25962067)">
+      <rect
+         style="fill:none;stroke:#000000;stroke-width:0.264583;stroke-miterlimit:1;stroke-dasharray:none;stroke-opacity:1"
+         id="rect1-6"
+         width="24.756968"
+         height="15.756968"
+         x="80.864204"
+         y="17.326025" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.23333px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Normal';font-variant-ligatures:normal;font-variant-position:sub;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583;stroke-miterlimit:1;stroke-opacity:1"
+         x="86.128914"
+         y="26.782705"
+         id="text7"><tspan
+           id="tspan7"
+           style="stroke-width:0.264583"
+           x="86.128914"
+           y="26.782705">Inodes</tspan></text>
+    </g>
+    <g
+       id="g12"
+       transform="translate(-28.045845)">
+      <rect
+         style="fill:none;stroke:#000000;stroke-width:0.264583;stroke-miterlimit:1;stroke-dasharray:none;stroke-opacity:1"
+         id="rect1-61"
+         width="29.733852"
+         height="15.733852"
+         x="125.28098"
+         y="17.066404" />
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.23333px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Normal';font-variant-ligatures:normal;font-variant-position:sub;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583;stroke-miterlimit:1;stroke-opacity:1"
+         x="127.48926"
+         y="26.511528"
+         id="text8"><tspan
+           id="tspan8"
+           style="stroke-width:0.264583"
+           x="127.48926"
+           y="26.511528">Data Blocks</tspan></text>
+    </g>
+  </g>
+</svg>
