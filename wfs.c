@@ -33,6 +33,17 @@ static struct fuse_operations wfs_oper = {
 
 int main(int argc, char *argv[])
 {
+    if (argc < 2)
+    {
+        fprintf(stderr, "Usage: %s <disk_path> [FUSE options] <mount_point>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+    //char *disk_path = argv[1];
+    for (int i = 1; i < (argc - 1); ++i)
+    {
+        argv[i] = argv[i + 1];
+    }
+    argc--; 
     return fuse_main(argc, argv, &wfs_oper, NULL);
 }
 
