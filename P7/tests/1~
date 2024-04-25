@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+
+TEST_DIR=/home/yurun_yuan/project7/p7/tests
+
+dd if=/dev/zero of=disk.img bs=1M count=1
+
+./mkfs -d disk.img -i 48 -b 200
+$TEST_DIR/mkfs_check -d disk.img -i 48 -b 200
+
+exit $?

@@ -1,4 +1,3 @@
-#include <math.h>
 #include <sys/types.h>
 #include "wfs.h"
 #include <stdio.h>
@@ -7,28 +6,19 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-size_t align_to_block(size_t size)
+int roundup(int num, int factor)
 {
-    if (size % BLOCK_SIZE == 0)
-    {
-        return size;
-    }
-    else
-    {
-        return (size / BLOCK_SIZE + 1) * BLOCK_SIZE;
-    }
+    return num % factor == 0 ? num : num + (factor - (num % factor));
 }
 
-size_t calculate_bitmap_size(size_t num_items)
-{
-    return (num_items + 7) / 8; // Add 7 to ensure rounding up when dividing by 8
-}
 
 int main(int argc, char *argv[])
 {
     char *disk_path = NULL;
     int num_inodes = 0;
     int num_data_blocks = 0;
+    int inode_bitmap_size = 0;
+    int data_bitmap_size = 0;
 
     // Parse command line arguments
     if (argc != 7)
@@ -58,23 +48,13 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Invalid arguments\n");
         exit(EXIT_FAILURE);
     }
+    num_inodes = roundup(num_inodes, 32);
+    num_data_blocks = roundup(num_data_blocks, 32);
 
-    // In your main or appropriate function
-    size_t inode_bitmap_size = calculate_bitmap_size(num_inodes);
-    size_t data_bitmap_size = calculate_bitmap_size(num_data_blocks);
-
-    // Aligning sections to block boundaries
-    inode_bitmap_size = align_to_block(inode_bitmap_size);
-    data_bitmap_size = align_to_block(data_bitmap_size);
-
-    size_t inodes_size = num_inodes * sizeof(struct wfs_inode);
-    // size_t data_blocks_size = num_data_blocks * BLOCK_SIZE;
-
-    // Calculate positions
     off_t i_bitmap_ptr = sizeof(struct wfs_sb);
-    off_t d_bitmap_ptr = i_bitmap_ptr + inode_bitmap_size;
-    off_t i_blocks_ptr = d_bitmap_ptr + data_bitmap_size;
-    off_t d_blocks_ptr = i_blocks_ptr + inodes_size;
+    off_t d_bitmap_ptr = i_bitmap_ptr + (num_inodes / 8);
+    off_t i_blocks_ptr = d_bitmap_ptr + (num_data_blocks / 8);
+    off_t d_blocks_ptr = i_blocks_ptr + (num_inodes * BLOCK_SIZE);
 
     int fd = open(disk_path, O_RDWR | O_CREAT, 0644);
     if (fd == -1)
