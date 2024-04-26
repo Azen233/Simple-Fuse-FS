@@ -19,6 +19,12 @@ static int wfs_mkdir(const char *path, mode_t mode);
 static int wfs_unlink(const char *path);
 static int wfs_rmdir(const char *path);
 
+
+
+
+
+char *disk_image_path;
+
 // Map functions to fuse_operations
 static struct fuse_operations wfs_oper = {
     .getattr = wfs_getattr,
@@ -38,11 +44,9 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Usage: %s <disk_path> [FUSE options] <mount_point>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-    //char *disk_path = argv[1];
-    for (int i = 1; i < (argc - 1); ++i)
-    {
-        argv[i] = argv[i + 1];
-    }
+    // Store the disk image path in a global variable
+    disk_image_path = argv[1];
+    argv++;
     argc--; 
     return fuse_main(argc, argv, &wfs_oper, NULL);
 }
