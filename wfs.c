@@ -62,6 +62,9 @@ struct wfs_sb read_superblock(int fd) {
     struct wfs_sb sb;
     lseek(fd, 0, SEEK_SET);  // Move the read/write pointer to the start of the file.
     if (read(fd, &sb, sizeof(struct wfs_sb)) != sizeof(struct wfs_sb)) {
+        printf("%lu\n",read(fd, &sb, sizeof(struct wfs_sb)));
+        printf("%lu\n",sizeof(struct wfs_sb));
+        
         perror("Failed to read superblock");
         exit(EXIT_FAILURE);  // Typically you'd handle errors more gracefully
     }
@@ -98,7 +101,7 @@ struct wfs_dentry *read_directory_block(int fd, off_t block_num) {
     }
     return block;
 }
-struct wfs_inode *find_inode_by_path(const char *path, int fd) {
+struct wfs_inode *find_inode_by_path(int fd,const char *path) {
     struct wfs_sb sb = read_superblock(fd);
     struct wfs_inode *current_inode = read_inode(fd, 0, &sb);  // Start with root inode
 
@@ -144,7 +147,7 @@ static int wfs_getattr(const char *path, struct stat *stbuf) {
     memset(stbuf, 0, sizeof(struct stat));
 
     // Find the inode for the given path
-    struct wfs_inode *inode = find_inode_by_path(path,global_fd);
+    struct wfs_inode *inode = find_inode_by_path(global_fd,path);
     if (!inode) {
         // If the inode was not found, return an error
         return -ENOENT;
@@ -168,15 +171,54 @@ static int wfs_getattr(const char *path, struct stat *stbuf) {
 
 static int wfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
-    (void)offset;
-    (void)fi;
-    if (strcmp(path, "/") != 0)
-        return -ENOENT;
+    (void)offset;  // Offset not used in this example
+    (void)fi;      // File info not needed here
+
+    // Find the inode corresponding to the path
+    int fd = global_fd;
+    struct wfs_inode *dir_inode = find_inode_by_path(fd, path);
+    if (!dir_inode) {
+        return -ENOENT;  // No such directory
+    }
+
+    if (!S_ISDIR(dir_inode->mode)) {
+        free(dir_inode);
+        return -ENOTDIR;  // Not a directory
+    }
+
+    // Add '.' and '..'
     filler(buf, ".", NULL, 0);
     filler(buf, "..", NULL, 0);
-    // Add actual file/directory names here
+
+    // Iterate through the directory entries in the inode's data blocks
+    for (int i = 0; i < D_BLOCK; i++) {
+        if (dir_inode->blocks[i] == 0)
+            continue;  // Skip unused blocks
+
+        struct wfs_dentry *entries = read_directory_block(fd, dir_inode->blocks[i]);
+        if (!entries) {
+            free(dir_inode);
+            return -EIO;  // I/O error
+        }
+
+        // Assume a fixed number of entries per block (this should be calculated based on block size)
+        int num_entries = BLOCK_SIZE / sizeof(struct wfs_dentry);
+        for (int j = 0; j < num_entries; j++) {
+            if (entries[j].name[0] == '\0')  // Assuming empty name indicates unused entry
+                continue;
+            if (filler(buf, entries[j].name, NULL, 0)) {
+                free(entries);
+                free(dir_inode);
+                return 0;  // Buffer is full
+            }
+        }
+        free(entries);
+    }
+
+    free(dir_inode);
     return 0;
 }
+
 
 static int wfs_open(const char *path, struct fuse_file_info *fi)
 {
