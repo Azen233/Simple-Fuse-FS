@@ -1,0 +1,204 @@
+#!/usr/bin/python3
+
+import time
+import subprocess
+import os
+import shutil
+import sys
+import copy
+
+RED = "\033[31m"
+GREEN = "\033[32m"
+BLUE = "\033[34m"
+RESET = "\033[0m"
+
+TEST_DIR = '/home/yurun_yuan/project7/p7/tests'
+READONLY_PREBUILT_DISK = f'{TEST_DIR}/prebuilt_disk'
+TEST_PREBUILT_DISK = 'test_prebuilt_disk'
+NEW_DISK_PATH = f'disk.img'
+
+CC = 'gcc'
+CFLAGS = '-Wall -Werror -pedantic -std=gnu18 -g'
+FUSE_CFLAGS = '`pkg-config fuse --cflags --libs`'
+
+
+MOUNT_POINT = 'mnt' #os.path.abspath('mnt')
+
+MKFS_TESTS = [0, 1]
+
+# tests on prebuilt image
+READONLY_TESTS = [2]
+
+# tests on new image
+NEW_IMAGE_TESTS = list(range(3, 20))
+
+special_tests = {
+    "17": {
+        "inode_num": 32,
+        "block_num": 64,
+    }, 
+    "18": {
+        "inode_num": 32,
+        "block_num": 1024,
+    }
+}
+
+
+class TestEnv:
+    def __init__(self) -> None:
+        self.passed_tests = 0
+        self.total_tests = 0
+        self.logger = print
+
+
+def assert_(test_env, return_status, msg='Fatal error'):
+    if not return_status:
+        test_env.logger(msg+'\nExit...\n')
+        sys.exit(-1)
+
+
+def run_command(test_env, command, err_msg, show_output=True):
+    # Run the command and check if it returns 0
+    stdout = None if show_output else subprocess.PIPE
+    stderr = None if show_output else subprocess.PIPE
+    try:
+        ret = subprocess.run(command, shell=True, timeout=15, stdout=stdout, stderr=stderr)
+    except subprocess.TimeoutExpired:
+        test_env.logger(f'Command {command} timed out')
+        return False
+    if ret.returncode != 0:
+        test_env.logger(err_msg)
+        return False
+    return True
+
+def compile(test_env):
+    # Compile students' code
+    assert_(test_env, run_command(test_env, f'{CC} {CFLAGS} wfs.c {FUSE_CFLAGS} -o wfs', 'Failed to compile wfs.c'))
+    assert_(test_env, run_command(test_env, f'{CC} {CFLAGS} -o mkfs mkfs.c', 'Failed to compile mkfs.c'))
+
+def run_single_test(test_env, test_number):
+
+    run_command = f"{TEST_DIR}/{test_number}"
+    try:
+        run_process = subprocess.run(run_command, shell=True, capture_output=True, timeout=15, text=True)
+    except subprocess.TimeoutExpired:
+        test_env.logger(f'TEST {test_number} {RED}TIMEOUT{RESET}')
+        return False
+
+    # Check the return value of the executable
+    if run_process.returncode == 0:
+        test_env.logger(f'\nTEST {test_number} {GREEN}PASS{RESET}\n')
+        return True
+    else:
+        test_env.logger(f'TEST {test_number} {RED}FAIL{RESET} with exit code {run_process.returncode}')
+        test_env.logger(f'Ouput: {run_process.stdout}\nError: {run_process.stderr}')
+        return False
+
+def run_tests(test_env: TestEnv, test_num_list, new_disk=False):
+    for i in test_num_list:
+        inode_num = test_env.inode_num if str(i) not in special_tests else special_tests[str(i)]["inode_num"]
+        block_num = test_env.block_num if str(i) not in special_tests else special_tests[str(i)]["block_num"]
+
+        with open(f'{TEST_DIR}/{i}.desc', 'r') as f:
+            desc = f.read()
+        test_env.logger(f'\n{BLUE}TEST {i}: {desc}{RESET}\n')
+        
+        if new_disk:
+            create_image(test_env)
+            new_disk = os.path.abspath(NEW_DISK_PATH) if test_env.use_abs_path else NEW_DISK_PATH
+            assert_(test_env, run_command(test_env, f'./mkfs -d {new_disk} -i {inode_num} -b {block_num}', 'Failed to initialize FS using mkfs', False))
+            run_command(test_env, f'./wfs {new_disk} -s {MOUNT_POINT}', './wfs returned non-zero exit code')
+            if not is_mounted():
+                test_env.logger('Failed to mount the empty file system')
+                test_env.total_tests += 1
+                continue
+        
+        test_result = run_single_test(test_env, i)
+        
+        if new_disk:
+            umount()
+            
+        if test_result:
+            test_env.passed_tests += 1
+        test_env.total_tests += 1
+
+def create_image(test_env, file_size='1M'):
+    # Create a new file with the specified size
+    if os.path.exists(NEW_DISK_PATH):
+        os.remove(NEW_DISK_PATH)
+    assert_(test_env, run_command(test_env, f'dd if=/dev/zero of=disk.img bs={file_size} count=1', 'Failed to create empty file', False))
+    
+
+def is_mounted():
+    return subprocess.run(['grep', '-qs', os.path.abspath(MOUNT_POINT), '/proc/mounts']).returncode == 0
+
+def umount():
+    mounted = is_mounted()
+    if mounted:
+        subprocess.run(['fusermount', '-u', os.path.abspath(MOUNT_POINT)])
+
+def mkdir_mnt():
+    if not os.path.exists(MOUNT_POINT):
+        os.mkdir(MOUNT_POINT)
+
+def main(use_abs_path=False, logger=print):
+    if use_abs_path:
+        MOUNT_POINT = os.path.abspath('mnt')
+    else:
+        MOUNT_POINT = 'mnt'
+    
+    test_env = TestEnv()
+    test_env.logger = logger
+    test_env.use_abs_path = use_abs_path
+    test_env.inode_num = 96
+    test_env.block_num = 200
+
+    compile(test_env)
+
+    umount()
+    mkdir_mnt()
+
+    ################ Tests on new image
+
+    create_image(test_env)
+    
+    # Test the formatted file system
+    run_tests(test_env, MKFS_TESTS)
+
+
+    ################ Test read on prebuilt image
+
+    # Mount the prebuilt image system
+    shutil.copyfile(READONLY_PREBUILT_DISK, TEST_PREBUILT_DISK)
+
+    test_prebuilt_disk = os.path.abspath(TEST_PREBUILT_DISK) if use_abs_path else TEST_PREBUILT_DISK
+    run_command(test_env, f'./wfs {test_prebuilt_disk} -s {MOUNT_POINT}', './wfs returned non-zero exit code', False)
+    if not is_mounted():
+        test_env.logger('Failed to mount the prebuilt file system')
+        return
+
+    run_tests(test_env, READONLY_TESTS)
+    
+    # Unmount the file system and rm test_prebuilt_disk
+    umount()
+    os.remove(TEST_PREBUILT_DISK)
+
+    ################ Test read, write, remove, etc
+
+    # Run the tests
+    run_tests(test_env, NEW_IMAGE_TESTS, True)
+
+    try:
+        os.rmdir(MOUNT_POINT)
+    except OSError as e:
+        test_env.logger(f"Error: {e}")
+
+    test_env.logger(f'{test_env.passed_tests} / {test_env.total_tests} tests passed')
+    return test_env.passed_tests
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 2 and sys.argv[1] == 'rel':
+        main(False)
+    else:
+        main(True)
