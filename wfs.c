@@ -260,51 +260,36 @@ static int wfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_
 static int wfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
     printf("Reading from path: %s\n", path);
-
     struct wfs_inode *inode = find_inode_by_path(path);
-    if (!inode)
-    {
+    if (!inode) {
         fprintf(stderr, "Error finding inode for path %s\n", path);
         return -ENOENT;
     }
-
-    if (offset >= inode->size)
-    {
+    if (offset >= inode->size) {
         return 0;  // Nothing to read, offset is beyond the end of the file
     }
-
     size_t bytes_to_read = min(size, inode->size - offset);
     size_t bytes_read = 0;
     int block_index = offset / BLOCK_SIZE;
     int block_offset = offset % BLOCK_SIZE;
-
-    while (bytes_read < bytes_to_read)
-    {
+    while (bytes_read < bytes_to_read) {
         size_t current_block_index;
-        if (block_index < D_BLOCK)  // Direct block
-        {
+        if (block_index < D_BLOCK) {  // Direct block
             current_block_index = inode->blocks[block_index];
-        }
-        else if (inode->blocks[IND_BLOCK] != 0)  // Indirect block
-        {
-            int *indirect_blocks = (int *)((char *)mapped_memory + inode->blocks[IND_BLOCK]);
+        } else {  // Indirect block
+            if (inode->blocks[IND_BLOCK] == 0) {
+                return -EIO;  // Indirect block not initialized
+            }
+            off_t *indirect_blocks = (off_t *)((char *)mapped_memory + inode->blocks[IND_BLOCK]);
             current_block_index = indirect_blocks[block_index - D_BLOCK];
         }
-        else
-        {
-            fprintf(stderr, "Error: Indirect block not initialized.\n");
-            return -EIO;  // Should not happen, indicates a corruption or logic error
-        }
-
         char *block_data = (char *)mapped_memory + current_block_index;
         size_t bytes_from_block = min(BLOCK_SIZE - block_offset, bytes_to_read - bytes_read);
         memcpy(buf + bytes_read, block_data + block_offset, bytes_from_block);
-        
         bytes_read += bytes_from_block;
         block_index++;
-        block_offset = 0;  // Only the first block might start at an offset
+        block_offset = 0;  // Reset block offset for subsequent blocks
     }
-
     return bytes_read;
 }
 
@@ -390,48 +375,47 @@ static int wfs_write(const char *path, const char *buf, size_t size, off_t offse
     off_t end_offset = offset + size;
     if (end_offset > inode->size) {
         inode->size = end_offset;
-        inode->mtim = time(NULL);
+        inode->mtim = time(NULL); // Update the modification time
     }
 
     size_t bytes_written = 0;
+    while (bytes_written < size) {
+        off_t block_index = (offset + bytes_written) / BLOCK_SIZE;
+        off_t block_offset = (offset + bytes_written) % BLOCK_SIZE;
+        size_t bytes_to_write = min(BLOCK_SIZE - block_offset, size - bytes_written);
 
-    for (size_t i = offset / BLOCK_SIZE; i <= (end_offset - 1) / BLOCK_SIZE; i++) {
-        if (i < D_BLOCK) {
+        if (block_index < D_BLOCK) {
             // Handling direct blocks
-            if (inode->blocks[i] == 0) {
-                inode->blocks[i] = allocate_block();
-                if (inode->blocks[i] == -1) return -ENOSPC;
+            if (inode->blocks[block_index] == 0) {
+                inode->blocks[block_index] = allocate_block();
+                if (inode->blocks[block_index] == -1) return -ENOSPC;
             }
-            char *block_data = (char *)mapped_memory + inode->blocks[i];
-            size_t block_start = (i == offset / BLOCK_SIZE) ? (offset % BLOCK_SIZE) : 0;
-            size_t block_end = (i == (end_offset - 1) / BLOCK_SIZE) ? ((end_offset - 1) % BLOCK_SIZE + 1) : BLOCK_SIZE;
-            memcpy(block_data + block_start, buf + bytes_written, block_end - block_start);
-            bytes_written += block_end - block_start;
+            char *block_data = (char *)mapped_memory + inode->blocks[block_index];
+            memcpy(block_data + block_offset, buf + bytes_written, bytes_to_write);
         } else {
             // Handling indirect blocks
             if (inode->blocks[IND_BLOCK] == 0) {
                 if (initialize_indirect_block(inode) != 0) return -ENOSPC;
             }
             off_t *indirect_blocks = (off_t *)((char *)mapped_memory + inode->blocks[IND_BLOCK]);
-            if (indirect_blocks[i - D_BLOCK] == 0) {
-                indirect_blocks[i - D_BLOCK] = allocate_block();
-                if (indirect_blocks[i - D_BLOCK] == -1) return -ENOSPC;
+            int indirect_index = block_index - D_BLOCK;
+            if (indirect_blocks[indirect_index] == 0) {
+                indirect_blocks[indirect_index] = allocate_block();
+                if (indirect_blocks[indirect_index] == -1) return -ENOSPC;
             }
-            char *block_data = (char *)mapped_memory + indirect_blocks[i - D_BLOCK];
-            size_t block_start = (i == offset / BLOCK_SIZE) ? (offset % BLOCK_SIZE) : 0;
-            size_t block_end = (i == (end_offset - 1) / BLOCK_SIZE) ? ((end_offset - 1) % BLOCK_SIZE + 1) : BLOCK_SIZE;
-            memcpy(block_data + block_start, buf + bytes_written, block_end - block_start);
-            bytes_written += block_end - block_start;
+            char *block_data = (char *)mapped_memory + indirect_blocks[indirect_index];
+            memcpy(block_data + block_offset, buf + bytes_written, bytes_to_write);
         }
+        bytes_written += bytes_to_write;
     }
 
     return bytes_written;
 }
 
 
-static int add_directory_entry(struct wfs_inode *parent_inode, int new_inode_num, const char *new_entry_name)
-{
-    // Attempt to add in direct blocks first
+
+static int add_directory_entry(struct wfs_inode *parent_inode, int new_inode_num, const char *new_entry_name) {
+    // Try to add the entry in direct blocks first.
     for (int i = 0; i < D_BLOCK; i++) {
         if (parent_inode->blocks[i] == 0) {
             parent_inode->blocks[i] = allocate_block();
@@ -442,18 +426,20 @@ static int add_directory_entry(struct wfs_inode *parent_inode, int new_inode_num
         for (int j = 0; j < (BLOCK_SIZE / sizeof(struct wfs_dentry)); j++) {
             if (dentries[j].num == 0) {
                 strncpy(dentries[j].name, new_entry_name, MAX_NAME - 1);
+                dentries[j].name[MAX_NAME - 1] = '\0'; // Ensure null termination
                 dentries[j].num = new_inode_num;
                 return 0; // Success
             }
         }
     }
 
-    // Initialize indirect block if necessary
+    // If no space in direct blocks, use the indirect block.
     if (parent_inode->blocks[IND_BLOCK] == 0) {
-        if (initialize_indirect_block(parent_inode) == -ENOSPC) return -ENOSPC;
+        parent_inode->blocks[IND_BLOCK] = allocate_block();
+        if (parent_inode->blocks[IND_BLOCK] == -1) return -ENOSPC;
+        memset((char *)mapped_memory + parent_inode->blocks[IND_BLOCK], 0, BLOCK_SIZE);
     }
 
-    // Add entry in indirect block
     off_t *indirect_blocks = (off_t *)((char *)mapped_memory + parent_inode->blocks[IND_BLOCK]);
     for (int i = 0; i < BLOCK_SIZE / sizeof(off_t); i++) {
         if (indirect_blocks[i] == 0) {
@@ -465,14 +451,14 @@ static int add_directory_entry(struct wfs_inode *parent_inode, int new_inode_num
         for (int j = 0; j < (BLOCK_SIZE / sizeof(struct wfs_dentry)); j++) {
             if (dentries[j].num == 0) {
                 strncpy(dentries[j].name, new_entry_name, MAX_NAME - 1);
+                dentries[j].name[MAX_NAME - 1] = '\0'; // Ensure null termination
                 dentries[j].num = new_inode_num;
                 return 0; // Success
             }
         }
     }
 
-    // If all blocks are full
-    return -ENOSPC; // No space left
+    return -ENOSPC; // No space left anywhere
 }
 
 
@@ -534,15 +520,15 @@ static int wfs_mknod(const char *path, mode_t mode, dev_t dev)
     new_inode->mtim = time(NULL);
     new_inode->ctim = time(NULL);
     memset(new_inode->blocks, 0, sizeof(new_inode->blocks)); // Initialize all blocks to 0
-
+    // Inside wfs_mknod, after allocating a new inode
     // Step 4: Add directory entry for the new file in the parent directory
-    if (add_directory_entry(parent_inode, new_inode_num, last_slash + 1) != 0)
-    {
+    if (add_directory_entry(parent_inode, new_inode_num, last_slash + 1) != 0) {
         free(parent_path);
-        // Optionally clear the inode bit if required
-        // free_inode(new_inode_num);
+        free_inode(new_inode_num); // Cleanup if directory entry addition fails
         return -EIO; // Failed to add directory entry
     }
+
+    
 
     free(parent_path);
     return 0;
