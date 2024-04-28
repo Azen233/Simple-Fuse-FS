@@ -409,13 +409,13 @@ int allocate_block()
     // Return -1 if no free blocks are available
     return -1;
 }
-int initialize_indirect_block(struct wfs_inode *inode) \
+int initialize_indirect_block(struct wfs_inode *inode) 
 {
     int indirect_block_index = allocate_block();
-    if (indirect_block_index == -1) return -ENOSPC;
+    if (indirect_block_index == -1) return 1; 
 
     inode->blocks[IND_BLOCK] = indirect_block_index;  // Set indirect block index
-    off_t *block_pointers = (off_t *)((char *)mapped_memory + sb.d_blocks_ptr + indirect_block_index * BLOCK_SIZE);
+    off_t *block_pointers = (off_t *)((char *)mapped_memory + sb.d_blocks_ptr + indirect_block_index);
     memset(block_pointers, 0, BLOCK_SIZE);  // Initialize all entries to zero
     return 0;
 }
@@ -502,31 +502,16 @@ static int wfs_write(const char *path, const char *buf, size_t size, off_t offse
 
 static int add_directory_entry(struct wfs_inode *parent_inode, int new_inode_num, const char *new_entry_name)
 {
-    // Loop through each data block of the parent directory
-    for (int i = 0; i < N_BLOCKS; i++)
-    {
-        if (parent_inode->blocks[i] == 0)
-        {
-            printf("no more data blocks\n");
-            // No more data blocks, allocate a new one if possible
-            int new_block = allocate_block();
-            printf("adding directory entry: finish allocate block\n");
-            if (new_block == -1)
-            {
-                return -ENOSPC; // No space left to allocate a new block
-            }
-            parent_inode->blocks[i] = new_block;
-            printf("parent inode blocks[i]:%ld\n", parent_inode->blocks[i]);
-            memset((char *)mapped_memory + parent_inode->blocks[i], 0, BLOCK_SIZE); // Clear new block
-            printf("clear new block\n");
+    // Attempt to add in direct blocks first
+    for (int i = 0; i < D_BLOCK; i++) {
+        if (parent_inode->blocks[i] == 0) {
+            parent_inode->blocks[i] = allocate_block();
+            if (parent_inode->blocks[i] == -1) return -ENOSPC; // No space left
+            memset((char *)mapped_memory + parent_inode->blocks[i], 0, BLOCK_SIZE);
         }
         struct wfs_dentry *dentries = (struct wfs_dentry *)((char *)mapped_memory + parent_inode->blocks[i]);
-        printf("111\n");
-        // Try to find an empty slot in this block
-        for (int j = 0; j < (BLOCK_SIZE / sizeof(struct wfs_dentry)); j++)
-        {
-            if (dentries[j].num == 0)
-            { // Found an empty slot
+        for (int j = 0; j < (BLOCK_SIZE / sizeof(struct wfs_dentry)); j++) {
+            if (dentries[j].num == 0) {
                 strncpy(dentries[j].name, new_entry_name, MAX_NAME - 1);
                 dentries[j].num = new_inode_num;
                 return 0; // Success
@@ -534,9 +519,34 @@ static int add_directory_entry(struct wfs_inode *parent_inode, int new_inode_num
         }
     }
 
-    // If all blocks are full and no empty entry was found
-    return -ENOSPC; // No space left in the directory blocks to add a new entry
+    // Initialize indirect block if necessary
+    if (parent_inode->blocks[IND_BLOCK] == 0) {
+        if (initialize_indirect_block(parent_inode) == -ENOSPC) return -ENOSPC;
+    }
+
+    // Add entry in indirect block
+    off_t *indirect_blocks = (off_t *)((char *)mapped_memory + parent_inode->blocks[IND_BLOCK]);
+    for (int i = 0; i < BLOCK_SIZE / sizeof(off_t); i++) {
+        if (indirect_blocks[i] == 0) {
+            indirect_blocks[i] = allocate_block();
+            if (indirect_blocks[i] == -1) return -ENOSPC;
+            memset((char *)mapped_memory + indirect_blocks[i], 0, BLOCK_SIZE);
+        }
+        struct wfs_dentry *dentries = (struct wfs_dentry *)((char *)mapped_memory + indirect_blocks[i]);
+        for (int j = 0; j < (BLOCK_SIZE / sizeof(struct wfs_dentry)); j++) {
+            if (dentries[j].num == 0) {
+                strncpy(dentries[j].name, new_entry_name, MAX_NAME - 1);
+                dentries[j].num = new_inode_num;
+                return 0; // Success
+            }
+        }
+    }
+
+    // If all blocks are full
+    return -ENOSPC; // No space left
 }
+
+
 
 static int wfs_mknod(const char *path, mode_t mode, dev_t dev)
 {
@@ -784,8 +794,66 @@ static int wfs_unlink(const char *path)
     return 0; // Success
 }
 
-static int wfs_rmdir(const char *path)
-{
-    // Handle directory removal based on your FS logic
-    return 0;
+static int wfs_rmdir(const char *path) {
+    printf("Removing directory: %s\n", path);
+
+    // Step 1: Locate the inode of the directory
+    struct wfs_inode *dir_inode = find_inode_by_path(path);
+    if (!dir_inode) {
+        return -ENOENT;  // No such directory
+    }
+
+    // Step 2: Ensure the inode is a directory
+    if (!S_ISDIR(dir_inode->mode)) {
+        return -ENOTDIR;  // Not a directory
+    }
+
+    // Step 3: Check if directory is empty except for "." and ".."
+    bool is_empty = true;
+    for (int i = 0; i < N_BLOCKS && dir_inode->blocks[i] != 0; i++) {
+        struct wfs_dentry *dentries = (struct wfs_dentry *)((char *)mapped_memory + dir_inode->blocks[i]);
+        for (int j = 0; j < (BLOCK_SIZE / sizeof(struct wfs_dentry)); j++) {
+            if (dentries[j].num != 0 && strcmp(dentries[j].name, ".") != 0 && strcmp(dentries[j].name, "..") != 0) {
+                is_empty = false;
+                break;
+            }
+        }
+        if (!is_empty) break;
+    }
+
+    if (!is_empty) {
+        return -ENOTEMPTY;  // Directory not empty
+    }
+
+    // Step 4: Find the parent directory and remove the directory entry
+    char *parent_path = strdup(path);
+    char *last_slash = strrchr(parent_path, '/');
+    if (last_slash == NULL || parent_path == last_slash) {
+        free(parent_path);
+        return -EIO;  // I/O error
+    }
+    *last_slash = '\0';
+    struct wfs_inode *parent_inode = find_inode_by_path(parent_path);
+    free(parent_path);
+
+    if (!parent_inode) {
+        return -ENOENT;  // Parent directory does not exist
+    }
+
+    // Step 5: Remove the directory entry
+    char *dir_name = last_slash + 1;
+    int ret = remove_directory_entry(parent_inode, dir_inode->num, dir_name);
+    if (ret != 0) {
+        return ret;  // Failed to remove directory entry
+    }
+
+    // Step 6: Free the inode and its blocks
+    free_inode(dir_inode->num);
+    for (int i = 0; i < N_BLOCKS; i++) {
+        if (dir_inode->blocks[i] != 0) {
+            free_block(dir_inode->blocks[i]);
+        }
+    }
+
+    return 0; // Success
 }
