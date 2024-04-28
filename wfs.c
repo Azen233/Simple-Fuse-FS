@@ -113,82 +113,7 @@ int main(int argc, char *argv[])
     return fuse_ret;
 }
 
-// struct wfs_inode *find_inode_by_path(const char *path)
-// {
-//     printf("find node by path for %s\n", path);
-//     // if (path[0] != '/')
-//     // {
-//     //     fprintf(stderr, "Not an absolute path\n");
-//     //     return NULL;
-//     // }
 
-//     if (strcmp(path, "/") == 0)
-//     {
-//         // printf("777\n");
-//         return (struct wfs_inode *)((char *)mapped_memory + sb.i_blocks_ptr); // Return root inode directly
-//     }
-//     // printf("555\n");
-//     struct wfs_inode *current_inode = (struct wfs_inode *)((char *)mapped_memory + sb.i_blocks_ptr);
-//     // printf("444\n");
-//     char *path_copy = strdup(path);
-//     // printf("444333\n");
-//     if (!path_copy)
-//     {
-//         perror("strdup failed");
-//         return NULL;
-//     }
-//     // printf("44432\n");
-//     char *token = strtok(path_copy, "/");
-//     // printf("333\n");
-//     while (token != NULL)
-//     {
-//         printf("token:%s\n", token);
-//         if (!S_ISDIR(current_inode->mode))
-//         {
-//             fprintf(stderr, "Not a directory\n");
-//             free(path_copy);
-//             return NULL;
-//         }
-
-//         bool found = false;
-//         for (int i = 0; i < N_BLOCKS && current_inode->blocks[i] != 0 && !found; i++)
-//         {
-//             // printf("666\n");
-//             struct wfs_dentry *dentries = (struct wfs_dentry *)((char *)mapped_memory + current_inode->blocks[i]);
-//             // printf("Current block index [%d]: %ld\n", i, current_inode->blocks[i]);
-//             // printf("777\n");
-//             // printf("888\n");
-//             // printf("%ld\n", BLOCK_SIZE / sizeof(struct wfs_dentry));
-//             for (int j = 0; j < BLOCK_SIZE / sizeof(struct wfs_dentry); j++)
-//             {
-//                 printf("dentiresname:%s\n", dentries[j].name);
-//                 if (strcmp(dentries[j].name, token) == 0)
-//                 {
-//                     printf("found inode!!!\n");
-//                     // printf("Address of current_inode: %p\n", (void *)(mapped_memory + sb.i_bitmap_ptr + dentries[j].num - 1));
-//                     printf("%d\n", dentries[j].num);
-//                     current_inode = (struct wfs_inode *)((char *)mapped_memory + sb.i_blocks_ptr + (dentries[j].num) * BLOCK_SIZE);
-//                     printf("Found inode for '%s': num=%d, mode=%o, size=%ld\n", token, current_inode->num, current_inode->mode, current_inode->size);
-//                     found = true;
-//                     break;
-//                 }
-//             }
-//         }
-
-//         if (!found)
-//         {
-//             fprintf(stderr, "Path component %s not found\n", token);
-//             free(path_copy);
-//             return NULL;
-//         }
-
-//         token = strtok(NULL, "/");
-//     }
-
-//     free(path_copy);
-//     // printf("return here\n");
-//     return current_inode; // Return the inode found at the end of the path
-// }
 struct wfs_inode *find_inode_by_path(const char *path)
 {
     printf("find node by path for %s\n", path);
@@ -288,33 +213,48 @@ static int wfs_getattr(const char *path, struct stat *stbuf)
 
 static int wfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
-    // Find the inode corresponding to the given path
     printf("readdir...\n");
     struct wfs_inode *inode = find_inode_by_path(path);
-    // printf("hhh\n");
     if (!inode || !S_ISDIR(inode->mode))
     {
-        // If the inode is not found or is not a directory, return an error
-        return -ENOENT;
+        return -ENOENT; // Inode not found or not a directory
     }
 
-    // Read the directory entries from the inode's data blocks and fill the buffer
-    for (int i = 0; i < N_BLOCKS && inode->blocks[i] != 0; i++)
+    // Read from direct blocks first
+    for (int i = 0; i < D_BLOCK && inode->blocks[i] != 0; i++)
     {
         struct wfs_dentry *dentries = (struct wfs_dentry *)((char *)mapped_memory + inode->blocks[i]);
         for (int j = 0; j < BLOCK_SIZE / sizeof(struct wfs_dentry); j++)
         {
-            // Check if the directory entry is valid
-            if (dentries[j].num != 0)
+            if (dentries[j].num != 0) // Valid entry
             {
-                // Add the directory entry to the buffer using the filler function
-                filler(buf, dentries[j].name, NULL, 0);
+                if (filler(buf, dentries[j].name, NULL, 0) != 0) 
+                    return 0; // Buffer full or other filler-related error
             }
         }
     }
 
-    return 0;
+    // Handle indirect block
+    if (inode->blocks[IND_BLOCK] != 0)
+    {
+        off_t *indirect_blocks = (off_t *)((char *)mapped_memory + inode->blocks[IND_BLOCK]);
+        for (int i = 0; i < BLOCK_SIZE / sizeof(off_t) && indirect_blocks[i] != 0; i++)
+        {
+            struct wfs_dentry *dentries = (struct wfs_dentry *)((char *)mapped_memory + indirect_blocks[i]);
+            for (int j = 0; j < BLOCK_SIZE / sizeof(struct wfs_dentry); j++)
+            {
+                if (dentries[j].num != 0) // Valid entry
+                {
+                    if (filler(buf, dentries[j].name, NULL, 0) != 0) 
+                        return 0; // Buffer full or other filler-related error
+                }
+            }
+        }
+    }
+
+    return 0; 
 }
+
 
 
 static int wfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
@@ -344,41 +284,30 @@ static int wfs_read(const char *path, char *buf, size_t size, off_t offset, stru
         if (block_index < D_BLOCK)  // Direct block
         {
             current_block_index = inode->blocks[block_index];
-            //Calculate how many bytes can be read from the current block
-            size_t bytes_from_block = min(BLOCK_SIZE - block_offset, bytes_to_read - bytes_read);
-
-            // Pointer to the start of the correct block in data_blocks
-            char *block_data = (char *)mapped_memory + inode->blocks[block_index] + block_offset;
-            memcpy(buf + bytes_read, block_data, bytes_from_block);
-
-            // Update the amount of bytes read and the current position in the output buffer
-            bytes_read += bytes_from_block;
-            block_index++;
-            block_offset = 0; // After the first block, we read from the start of the blocks
         }
-        else  // Indirect block
+        else if (inode->blocks[IND_BLOCK] != 0)  // Indirect block
         {
-            if (inode->blocks[IND_BLOCK] == 0)
-            {
-                fprintf(stderr, "Error: Indirect block not initialized.\n");
-                return -EIO;  // Should not happen, indicates a corruption or logic error
-            }
-            int *indirect_blocks = (int *)((char *)mapped_memory + sb.d_blocks_ptr + inode->blocks[IND_BLOCK]);
+            int *indirect_blocks = (int *)((char *)mapped_memory + inode->blocks[IND_BLOCK]);
             current_block_index = indirect_blocks[block_index - D_BLOCK];
-            char *block_data = (char *)mapped_memory + sb.d_blocks_ptr + current_block_index  * BLOCK_SIZE;
-            size_t bytes_from_block = min(BLOCK_SIZE - block_offset, bytes_to_read - bytes_read);
-            memcpy(buf + bytes_read, block_data + block_offset, bytes_from_block);
-
-            bytes_read += bytes_from_block;
-            block_index++;
-            block_offset = 0;  // Only the first block might start at an offset
+        }
+        else
+        {
+            fprintf(stderr, "Error: Indirect block not initialized.\n");
+            return -EIO;  // Should not happen, indicates a corruption or logic error
         }
 
+        char *block_data = (char *)mapped_memory + current_block_index;
+        size_t bytes_from_block = min(BLOCK_SIZE - block_offset, bytes_to_read - bytes_read);
+        memcpy(buf + bytes_read, block_data + block_offset, bytes_from_block);
         
+        bytes_read += bytes_from_block;
+        block_index++;
+        block_offset = 0;  // Only the first block might start at an offset
     }
 
     return bytes_read;
 }
+
 
 
 int allocate_block()
@@ -412,7 +341,7 @@ int allocate_block()
 int initialize_indirect_block(struct wfs_inode *inode) 
 {
     int indirect_block_index = allocate_block();
-    if (indirect_block_index == -1) return 1; 
+    if (indirect_block_index == -1) return -ENOSPC; 
 
     inode->blocks[IND_BLOCK] = indirect_block_index;  // Set indirect block index
     off_t *block_pointers = (off_t *)((char *)mapped_memory + sb.d_blocks_ptr + indirect_block_index);
