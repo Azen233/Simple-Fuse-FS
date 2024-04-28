@@ -316,56 +316,7 @@ static int wfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_
     return 0;
 }
 
-// static int wfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
-// {
-//     // 1. get inode fro the path
-//     // 2. loop through the file direct data blocks to find the offset position
-//     // 3. copy the things after offset in datablocks to the buf
-// }
-// static int wfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
-// {
-//     printf("Reading from path: %s\n", path);
 
-//     // Find the inode associated with the path
-//     struct wfs_inode *inode = find_inode_by_path(path);
-//     if (!inode)
-//     {
-//         fprintf(stderr, "Error finding inode for path %s\n", path);
-//         return -ENOENT; // No such file
-//     }
-
-//     // Check if the offset is not beyond the end of the file
-//     if (offset >= inode->size)
-//     {
-//         return 0; // Nothing to read, offset is at or beyond the end of the file
-//     }
-
-//     // Calculate the actual size to read, which may be less than the requested size
-//     size_t bytes_to_read = min(size, inode->size - offset); // Ensure we don't read beyond the file
-
-//     // Calculate the starting block and offset within the block
-//     int block_index = offset / BLOCK_SIZE;
-//     int block_offset = offset % BLOCK_SIZE;
-
-//     // Read from the appropriate blocks
-//     size_t bytes_read = 0;
-//     while (bytes_read < bytes_to_read)
-//     {
-//         // Calculate how many bytes can be read from the current block
-//         size_t bytes_from_block = min(BLOCK_SIZE - block_offset, bytes_to_read - bytes_read);
-
-//         // Pointer to the start of the correct block in data_blocks
-//         char *block_data = (char *)mapped_memory + inode->blocks[block_index] + block_offset;
-//         memcpy(buf + bytes_read, block_data, bytes_from_block);
-
-//         // Update the amount of bytes read and the current position in the output buffer
-//         bytes_read += bytes_from_block;
-//         block_index++;
-//         block_offset = 0; // After the first block, we read from the start of the blocks
-//     }
-
-//     return bytes_read; // Return the number of bytes actually read
-// }
 static int wfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
     printf("Reading from path: %s\n", path);
@@ -397,7 +348,7 @@ static int wfs_read(const char *path, char *buf, size_t size, off_t offset, stru
             size_t bytes_from_block = min(BLOCK_SIZE - block_offset, bytes_to_read - bytes_read);
 
             // Pointer to the start of the correct block in data_blocks
-            char *block_data = (char *)mapped_memory + inode->blocks[block_index] + block_offset * BLOCK_SIZE;
+            char *block_data = (char *)mapped_memory + inode->blocks[block_index] + block_offset;
             memcpy(buf + bytes_read, block_data, bytes_from_block);
 
             // Update the amount of bytes read and the current position in the output buffer
@@ -470,31 +421,7 @@ int initialize_indirect_block(struct wfs_inode *inode) \
 }
 
 
-// int allocate_inode()
-// {
-//     // Access the inode bitmap directly from the global variable
-//     char *bitmap = inode_bitmap;
 
-//     // Iterate over the bitmap to find a free inode, using the number of inodes from the global superblock
-//     for (size_t i = 1; i < sb.num_inodes; i++)
-//     {
-//         size_t byte_index = i / 8;
-//         size_t bit_index = i % 8;
-
-//         // Check if the current inode is free
-//         if (!(bitmap[byte_index] & (1 << bit_index)))
-//         {
-//             // Mark the inode as used
-//             bitmap[byte_index] |= (1 << bit_index);
-
-//             // Return the inode number as the index, assuming inodes are indexed from 0
-//             return i;
-//         }
-//     }
-
-//     // Return -1 if no free inodes are available
-//     return -1;
-// }
 int allocate_inode() 
 {
     char *bitmap = inode_bitmap;
@@ -525,66 +452,7 @@ int allocate_inode()
     return -1; // No free inodes available
 }
 
-// static int wfs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
-// {
-//     // Find the inode by the given path
-//     struct wfs_inode *inode = find_inode_by_path(path);
-//     if (inode == NULL)
-//     {
-//         return 0;
-//         //return -ENOENT; // No such file
-//     }
 
-//     if (!S_ISREG(inode->mode))
-//     {
-        
-//         return -EISDIR; // Is a directory, not a file
-//     }
-
-//     // Calculate the write's ending position
-//     off_t end_offset = offset + size;
-
-//     // Check if the write goes beyond the current size of the file
-//     if (end_offset > inode->size)
-//     {
-//         // Update file size (assuming no file system limits are being enforced here)
-//         inode->size = end_offset;
-//         // Update the modification time
-//         inode->mtim = time(NULL);
-//     }
-
-//     // Write the data
-//     // Iterate over each block that the write touches
-//     for (size_t i = offset / BLOCK_SIZE; i <= end_offset / BLOCK_SIZE; ++i)
-//     {
-//         if (i >= N_BLOCKS)
-//         {
-//             return -EFBIG; // Trying to write beyond the maximum file size supported by direct blocks
-//         }
-
-//         // Check if the block has not been allocated yet
-//         if (inode->blocks[i] == 0)
-//         {
-//             // Allocate a new block here
-//             // For simplicity, assume a function allocate_block() that finds a free block, marks it as used, and returns the block number
-//             inode->blocks[i] = allocate_block();
-//             if (inode->blocks[i] == 0)
-//             {
-//                 return -ENOSPC; // No space left on device
-//             }
-//         }
-
-//         // Calculate the start and end of the part of the write that falls within this block
-//         size_t start_in_block = (i == offset / BLOCK_SIZE) ? (offset % BLOCK_SIZE) : 0;
-//         size_t end_in_block = (i == end_offset / BLOCK_SIZE) ? (end_offset % BLOCK_SIZE) : BLOCK_SIZE;
-
-//         // Copy the data into the block
-//         char *block_data = (char *)((char *)mapped_memory + inode->blocks[i]);
-//         memcpy(block_data + start_in_block, buf + (i * BLOCK_SIZE - offset), end_in_block - start_in_block);
-//     }
-
-//     return size;
-// }
 static int wfs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
     struct wfs_inode *inode = find_inode_by_path(path);
     if (!inode) return -ENOENT;
@@ -596,46 +464,39 @@ static int wfs_write(const char *path, const char *buf, size_t size, off_t offse
         inode->mtim = time(NULL);
     }
 
+    size_t bytes_written = 0;
+
     for (size_t i = offset / BLOCK_SIZE; i <= (end_offset - 1) / BLOCK_SIZE; i++) {
-        if (i < D_BLOCK) 
-        {
-            if (!inode->blocks[i]) 
-            {
+        if (i < D_BLOCK) {
+            // Handling direct blocks
+            if (inode->blocks[i] == 0) {
                 inode->blocks[i] = allocate_block();
                 if (inode->blocks[i] == -1) return -ENOSPC;
             }
-                    // Calculate the start and end of the part of the write that falls within this block
-            size_t start_in_block = (i == offset / BLOCK_SIZE) ? (offset % BLOCK_SIZE) : 0;
-            size_t end_in_block = (i == end_offset / BLOCK_SIZE) ? (end_offset % BLOCK_SIZE) : BLOCK_SIZE;
-
-            // Copy the data into the block
-            char *block_data = (char *)((char *)mapped_memory + inode->blocks[i]);
-            memcpy(block_data + start_in_block, buf + (i * BLOCK_SIZE - offset), end_in_block - start_in_block);
-        } 
-        else 
-        {
-            // Handle indirect blocks
-            if (inode->blocks[IND_BLOCK] == 0) 
-            {
+            char *block_data = (char *)mapped_memory + inode->blocks[i];
+            size_t block_start = (i == offset / BLOCK_SIZE) ? (offset % BLOCK_SIZE) : 0;
+            size_t block_end = (i == (end_offset - 1) / BLOCK_SIZE) ? ((end_offset - 1) % BLOCK_SIZE + 1) : BLOCK_SIZE;
+            memcpy(block_data + block_start, buf + bytes_written, block_end - block_start);
+            bytes_written += block_end - block_start;
+        } else {
+            // Handling indirect blocks
+            if (inode->blocks[IND_BLOCK] == 0) {
                 if (initialize_indirect_block(inode) != 0) return -ENOSPC;
             }
-            off_t *indirect_blocks = (off_t *)((char *)mapped_memory + sb.d_blocks_ptr + inode->blocks[IND_BLOCK] );
-            if (!indirect_blocks[i - D_BLOCK]) 
-            {
+            off_t *indirect_blocks = (off_t *)((char *)mapped_memory + inode->blocks[IND_BLOCK]);
+            if (indirect_blocks[i - D_BLOCK] == 0) {
                 indirect_blocks[i - D_BLOCK] = allocate_block();
                 if (indirect_blocks[i - D_BLOCK] == -1) return -ENOSPC;
             }
-            // Compute block pointers and offsets
-            char *block_data = (char *)((char *)mapped_memory + sb.d_blocks_ptr + inode->blocks[i % D_BLOCK] );
-            size_t start_in_block = (i == offset / BLOCK_SIZE) ? (offset % BLOCK_SIZE) : 0;
-            size_t end_in_block = (i == (end_offset - 1) / BLOCK_SIZE) ? ((end_offset - 1) % BLOCK_SIZE + 1) : BLOCK_SIZE;
-            memcpy(block_data + start_in_block, buf + (i * BLOCK_SIZE - offset), end_in_block - start_in_block);
+            char *block_data = (char *)mapped_memory + indirect_blocks[i - D_BLOCK];
+            size_t block_start = (i == offset / BLOCK_SIZE) ? (offset % BLOCK_SIZE) : 0;
+            size_t block_end = (i == (end_offset - 1) / BLOCK_SIZE) ? ((end_offset - 1) % BLOCK_SIZE + 1) : BLOCK_SIZE;
+            memcpy(block_data + block_start, buf + bytes_written, block_end - block_start);
+            bytes_written += block_end - block_start;
         }
-
-        
     }
 
-    return size;
+    return bytes_written;
 }
 
 
