@@ -1,1 +1,0 @@
-Check the superblock and root directory entry of initialized filesystem (after executing mkfs). See mkfs_check.c for how this is tested. 

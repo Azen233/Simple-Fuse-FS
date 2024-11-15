@@ -1,1 +1,0 @@
-Read/write test. Write more than D_BLOCKS of data to two files alternatively, ensure read is correct. 
