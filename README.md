@@ -2,9 +2,7 @@
 
 *A lightweight, user-space filesystem built with FUSE in C.*
 
----
-
-## Overview
+--## Overview
 
 **Simple-FUSE-FS** is a minimalistic, block-based filesystem designed to run entirely in user space using [FUSE (Filesystem in Userspace)](https://libfuse.github.io/). It supports standard file operations such as creating, reading, writing, and deleting files and directories. This project serves as an excellent starting point for anyone looking to explore filesystem design without the complexity of kernel development.
 
