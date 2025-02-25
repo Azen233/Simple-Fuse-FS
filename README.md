@@ -80,7 +80,7 @@ rm mnt/example_file
 ```
 
 ## Unmount the Filesystem
-When finished, unmount with:
+when finished, unmount with:
 
 ```sh
 fusermount -u mnt
