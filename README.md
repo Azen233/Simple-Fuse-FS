@@ -37,7 +37,9 @@
 ```sh
 git clone https://github.com/YOUR_USERNAME/simple-fuse-fs.git
 cd simple-fuse-fs
-# Build the Project
+```
+
+## Build the Project
 Compile the filesystem with:
 
 ```sh
