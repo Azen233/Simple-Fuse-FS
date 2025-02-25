@@ -46,7 +46,7 @@ make
 
 This will compile the source code located in the `src/` directory and generate the necessary binaries (e.g., `mkfs` and `wfs`).
 
-# Create and Format a Disk Image
+## Create and Format a Disk Image
 A helper script (`create_disk.sh`) is provided to create a zeroed disk image. To create and format your disk image:
 
 ```sh
@@ -56,7 +56,7 @@ A helper script (`create_disk.sh`) is provided to create a zeroed disk image. To
 
 Note: The number of data blocks is automatically rounded up to a multiple of 32 for proper alignment.
 
-# Mount the Filesystem
+## Mount the Filesystem
 Create a mount point and mount the filesystem using:
 
 ```sh
@@ -66,7 +66,7 @@ mkdir mnt
 
 Once mounted, you can interact with the filesystem as if it were a physical disk.
 
-# Testing Basic Commands
+## Testing Basic Commands
 After mounting, try the following commands:
 
 ```sh
@@ -77,7 +77,7 @@ cat mnt/example_file
 rm mnt/example_file
 ```
 
-# Unmount the Filesystem
+## Unmount the Filesystem
 When finished, unmount with:
 
 ```sh
@@ -90,7 +90,7 @@ On macOS, you may need to use:
 umount mnt
 ```
 
-# How It Works
+## How It Works
 Simple-FUSE-FS emulates a traditional UNIX filesystem by managing a virtual disk image. Key components include:
 
 - **Inodes:** Data structures that store metadata for files and directories (permissions, ownership, timestamps, size, etc.).
